@@ -424,6 +424,7 @@
 		clock-names = "refclk";
 
 		no-hpd;
+		max-brightness = <255>;
 
 		ports {
 			#address-cells = <1>;
