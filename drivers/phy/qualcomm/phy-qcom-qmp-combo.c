@@ -2541,6 +2541,21 @@ static const struct phy_ops qmp_combo_dp_ops = {
 	.owner		= THIS_MODULE,
 };
 
+static void __iomem *qmp_combo_iomap(struct device *dev, struct device_node *np,
+					int index, bool exclusive)
+{
+	struct resource res;
+
+	if (!exclusive) {
+		if (of_address_to_resource(np, index, &res))
+			return IOMEM_ERR_PTR(-EINVAL);
+
+		return devm_ioremap(dev, res.start, resource_size(&res));
+	}
+
+	return devm_of_iomap(dev, np, index, NULL);
+}
+
 static int qmp_combo_create(struct device *dev, struct device_node *np, int id,
 			void __iomem *serdes, const struct qmp_phy_cfg *cfg)
 {
@@ -2548,7 +2563,16 @@ static int qmp_combo_create(struct device *dev, struct device_node *np, int id,
 	struct phy *generic_phy;
 	struct qmp_phy *qphy;
 	const struct phy_ops *ops;
+	bool exclusive = true;
 	int ret;
+
+	/*
+	 * FIXME: The binding for sc8280xp needs to be fixed to not rely on
+	 *	  mapping the regions twice (i.e. for both the USB and DP
+	 *	  PHY).
+	 */
+	if (of_device_is_compatible(dev->of_node, "qcom,sc8280xp-qmp-usb43dp-phy"))
+		exclusive = false;
 
 	qphy = devm_kzalloc(dev, sizeof(*qphy), GFP_KERNEL);
 	if (!qphy)
@@ -2562,15 +2586,15 @@ static int qmp_combo_create(struct device *dev, struct device_node *np, int id,
 	 * For dual lane PHYs: tx2 -> 3, rx2 -> 4, pcs_misc (optional) -> 5
 	 * For single lane PHYs: pcs_misc (optional) -> 3.
 	 */
-	qphy->tx = devm_of_iomap(dev, np, 0, NULL);
+	qphy->tx = qmp_combo_iomap(dev, np, 0, exclusive);
 	if (IS_ERR(qphy->tx))
 		return PTR_ERR(qphy->tx);
 
-	qphy->rx = devm_of_iomap(dev, np, 1, NULL);
+	qphy->rx = qmp_combo_iomap(dev, np, 1, exclusive);
 	if (IS_ERR(qphy->rx))
 		return PTR_ERR(qphy->rx);
 
-	qphy->pcs = devm_of_iomap(dev, np, 2, NULL);
+	qphy->pcs = qmp_combo_iomap(dev, np, 2, exclusive);
 	if (IS_ERR(qphy->pcs))
 		return PTR_ERR(qphy->pcs);
 
@@ -2578,17 +2602,17 @@ static int qmp_combo_create(struct device *dev, struct device_node *np, int id,
 		qphy->pcs_usb = qphy->pcs + cfg->pcs_usb_offset;
 
 	if (cfg->lanes >= 2) {
-		qphy->tx2 = devm_of_iomap(dev, np, 3, NULL);
+		qphy->tx2 = qmp_combo_iomap(dev, np, 3, exclusive);
 		if (IS_ERR(qphy->tx2))
 			return PTR_ERR(qphy->tx2);
 
-		qphy->rx2 = devm_of_iomap(dev, np, 4, NULL);
+		qphy->rx2 = qmp_combo_iomap(dev, np, 4, exclusive);
 		if (IS_ERR(qphy->rx2))
 			return PTR_ERR(qphy->rx2);
 
-		qphy->pcs_misc = devm_of_iomap(dev, np, 5, NULL);
+		qphy->pcs_misc = qmp_combo_iomap(dev, np, 5, exclusive);
 	} else {
-		qphy->pcs_misc = devm_of_iomap(dev, np, 3, NULL);
+		qphy->pcs_misc = qmp_combo_iomap(dev, np, 3, exclusive);
 	}
 
 	if (IS_ERR(qphy->pcs_misc)) {
