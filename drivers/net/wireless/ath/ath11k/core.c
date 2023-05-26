@@ -1087,9 +1087,20 @@ static int ath11k_core_parse_bd_ie_board(struct ath11k_base *ab,
 			if (board_ie_len != strlen(boardname))
 				goto next;
 
-			ret = memcmp(board_ie_data, boardname, strlen(boardname));
-			if (ret)
+			char terminated_board_data[128];
+			memcpy(terminated_board_data, board_ie_data, strlen(boardname));
+			terminated_board_data[strlen(boardname)] = '\0';
+			ath11k_err(ab, "%s\n", terminated_board_data);
+			terminated_board_data[strlen(boardname)-3] = '1';
+			terminated_board_data[strlen(boardname)-2] = '4';
+			terminated_board_data[strlen(boardname)-1] = '0';
+			ath11k_err(ab, "modified: %s\n", terminated_board_data);
+
+			ret = memcmp(terminated_board_data, boardname, strlen(boardname));
+			if (ret) {
 				goto next;
+			}
+			ath11k_err(ab, "success: %s\n", boardname);
 
 			name_match_found = true;
 			ath11k_dbg(ab, ATH11K_DBG_BOOT,
